@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  active
+  suspended
+  deactivated
+}
+
+enum PortfolioStatus {
+  active
+  archived
+}
+
+enum SecurityType {
+  stock
+}
+
+enum DriftEventStatus {
+  open
+  acknowledged
+  resolved
+}
+
+enum EmailSentStatus {
+  success
+  pending
+  failed
+}
+
+enum AlertChannel {
+  in_app
+  email
+}
+
+enum AlertType {
+  drift_detected
+}
+
+enum AlertStatus {
+  unread
+  read
+  archived
+  sent
+  failed
+}
+
+enum SessionStatus {
+  active
+  revoked
+  expired
+}
+
+model User {
+  id              String        @id @default(uuid()) @db.Uuid
+  firstName       String        @map("first_name") @db.VarChar(100)
+  lastName        String        @map("last_name") @db.VarChar(100)
+  email           String        @unique @db.VarChar(255)
+  passwordHash    String        @map("password_hash") @db.VarChar(255)
+  status          UserStatus    @default(active)
+  emailVerifiedAt DateTime?     @map("email_verified_at") @db.Timestamp(6)
+  lastLoginAt     DateTime?     @map("last_login_at") @db.Timestamp(6)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  authSessions    AuthSession[]
+  portfolios      Portfolio[]
+  alerts          Alert[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  id               String        @id @default(uuid()) @db.Uuid
+  userId           String        @map("user_id") @db.Uuid
+  refreshTokenHash String        @map("refresh_token_hash") @db.VarChar(255)
+  status           SessionStatus @default(active)
+  expiresAt        DateTime      @map("expires_at") @db.Timestamp(6)
+  lastUsedAt       DateTime?     @map("last_used_at") @db.Timestamp(6)
+  revokedAt        DateTime?     @map("revoked_at") @db.Timestamp(6)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("auth_sessions")
+}
+
+model Exchange {
+  id           String     @id @default(uuid()) @db.Uuid
+  tickerPrefix String     @unique @map("ticker_prefix") @db.VarChar(20)
+  name         String     @db.VarChar(120)
+  country      String     @default("NIL") @db.VarChar(100)
+  timezone     String     @default("NIL") @db.VarChar(100)
+  currencyCode String     @default("NIL") @map("currency_code") @db.VarChar(10)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+  securities   Security[]
+
+  @@map("exchanges")
+}
+
+model Security {
+  id                         String                      @id @default(uuid()) @db.Uuid
+  exchangeId                 String                      @map("exchange_id") @db.Uuid
+  securityType               SecurityType                @default(stock) @map("security_type")
+  ticker                     String                      @db.VarChar(30)
+  companyName                String                      @map("company_name") @db.VarChar(255)
+  isActive                   Boolean                     @default(true) @map("is_active")
+  createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                  DateTime                    @updatedAt @map("updated_at") @db.Timestamp(6)
+  exchange                   Exchange                    @relation(fields: [exchangeId], references: [id], onDelete: Restrict)
+  holdings                   Holding[]
+  holdingTransactions        HoldingTransaction[]
+  holdingAllocationSnapshots HoldingAllocationSnapshot[]
+  driftEvents                DriftEvent[]
+  prices                     Price[]
+
+  @@unique([exchangeId, ticker])
+  @@map("securities")
+}
+
+model Portfolio {
+  id                      String                        @id @default(uuid()) @db.Uuid
+  userId                  String                        @map("user_id") @db.Uuid
+  name                    String                        @db.VarChar(150)
+  description             String?                       @db.Text
+  status                  PortfolioStatus               @default(active)
+  driftMultiplier         Decimal                       @default(1.5) @map("drift_multiplier") @db.Decimal(3, 1)
+  currentAssetCount       Int                           @default(0) @map("current_asset_count")
+  currentTotalMarketValue Decimal                       @default(0) @map("current_total_market_value") @db.Decimal(20, 2)
+  currentEqualWeight      Decimal                       @default(0) @map("current_equal_weight") @db.Decimal(4, 1)
+  currentDriftThreshold   Decimal                       @default(0) @map("current_drift_threshold") @db.Decimal(4, 1)
+  lastRecalculatedAt      DateTime?                     @map("last_recalculated_at") @db.Timestamp(6)
+  createdAt               DateTime                      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime                      @updatedAt @map("updated_at") @db.Timestamp(6)
+  user                    User                          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  holdings                Holding[]
+  allocationSnapshots     PortfolioAllocationSnapshot[]
+  driftEvents             DriftEvent[]
+  alerts                  Alert[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("portfolios")
+}
+
+model Holding {
+  id                         String                      @id @default(uuid()) @db.Uuid
+  portfolioId                String                      @map("portfolio_id") @db.Uuid
+  securityId                 String                      @map("security_id") @db.Uuid
+  totalShares                Decimal                     @default(0) @map("total_shares") @db.Decimal(10, 0)
+  currentMarketPrice         Decimal                     @default(0) @map("current_market_price") @db.Decimal(7, 2)
+  currentMarketValue         Decimal                     @default(0) @map("current_market_value") @db.Decimal(15, 2)
+  currentWeight              Decimal                     @default(0) @map("current_weight") @db.Decimal(4, 1)
+  lastTransactionAt          DateTime?                   @map("last_transaction_at") @db.Timestamp(6)
+  createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                  DateTime                    @updatedAt @map("updated_at") @db.Timestamp(6)
+  portfolio                  Portfolio                   @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  security                   Security                    @relation(fields: [securityId], references: [id], onDelete: Restrict)
+  transactions               HoldingTransaction[]
+  holdingAllocationSnapshots HoldingAllocationSnapshot[]
+  driftEvents                DriftEvent[]
+
+  @@unique([portfolioId, securityId])
+  @@index([portfolioId])
+  @@index([securityId])
+  @@map("holdings")
+}
+
+model HoldingTransaction {
+  id              String   @id @default(uuid()) @db.Uuid
+  holdingId       String   @map("holding_id") @db.Uuid
+  securityId      String   @map("security_id") @db.Uuid
+  transactionDate DateTime @map("transaction_date") @db.Timestamp(6)
+  shares          Decimal  @db.Decimal(20, 8)
+  pricePerShare   Decimal  @map("price_per_share") @db.Decimal(20, 8)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  holding         Holding  @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  security        Security @relation(fields: [securityId], references: [id], onDelete: Restrict)
+
+  @@index([holdingId])
+  @@index([securityId, transactionDate])
+  @@map("holding_transactions")
+}
+
+model Price {
+  id         String   @id @default(uuid()) @db.Uuid
+  securityId String   @map("security_id") @db.Uuid
+  price      Decimal  @db.Decimal(10, 2)
+  timestamp  DateTime @db.Timestamp(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  security   Security @relation(fields: [securityId], references: [id], onDelete: Cascade)
+
+  @@unique([securityId, timestamp])
+  @@index([timestamp])
+  @@map("prices")
+}
+
+model PortfolioAllocationSnapshot {
+  id               String                      @id @default(uuid()) @db.Uuid
+  portfolioId      String                      @map("portfolio_id") @db.Uuid
+  snapshotTime     DateTime                    @map("snapshot_time") @db.Timestamp(6)
+  totalMarketValue Decimal                     @map("total_market_value") @db.Decimal(20, 4)
+  assetCount       Int                         @map("asset_count")
+  equalWeight      Decimal                     @map("equal_weight") @db.Decimal(4, 1)
+  driftMultiplier  Decimal                     @map("drift_multiplier") @db.Decimal(3, 1)
+  driftThreshold   Decimal                     @map("drift_threshold") @db.Decimal(4, 1)
+  createdAt        DateTime                    @default(now()) @map("created_at") @db.Timestamp(6)
+  portfolio        Portfolio                   @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  holdingSnapshots HoldingAllocationSnapshot[]
+
+  @@unique([portfolioId, snapshotTime])
+  @@index([portfolioId])
+  @@map("portfolio_allocation_snapshots")
+}
+
+model HoldingAllocationSnapshot {
+  id                   String                      @id @default(uuid()) @db.Uuid
+  allocationSnapshotId String                      @map("allocation_snapshot_id") @db.Uuid
+  holdingId            String                      @map("holding_id") @db.Uuid
+  securityId           String                      @map("security_id") @db.Uuid
+  shares               Decimal                     @db.Decimal(20, 8)
+  marketPrice          Decimal                     @map("market_price") @db.Decimal(20, 8)
+  marketValue          Decimal                     @map("market_value") @db.Decimal(20, 8)
+  weight               Decimal                     @db.Decimal(4, 1)
+  exceededThreshold    Boolean                     @default(false) @map("exceeded_threshold")
+  createdAt            DateTime                    @default(now()) @map("created_at") @db.Timestamp(6)
+  allocationSnapshot   PortfolioAllocationSnapshot @relation(fields: [allocationSnapshotId], references: [id], onDelete: Cascade)
+  holding              Holding                     @relation(fields: [holdingId], references: [id], onDelete: Restrict)
+  security             Security                    @relation(fields: [securityId], references: [id], onDelete: Restrict)
+
+  @@unique([allocationSnapshotId, holdingId])
+  @@index([allocationSnapshotId])
+  @@index([securityId])
+  @@map("holdings_allocation_snapshot")
+}
+
+model DriftEvent {
+  id             String           @id @default(uuid()) @db.Uuid
+  portfolioId    String           @map("portfolio_id") @db.Uuid
+  holdingId      String           @map("holding_id") @db.Uuid
+  securityId     String           @map("security_id") @db.Uuid
+  detectedAt     DateTime         @map("detected_at") @db.Timestamp(6)
+  assetWeight    Decimal          @map("asset_weight") @db.Decimal(4, 1)
+  equalWeight    Decimal          @map("equal_weight") @db.Decimal(4, 1)
+  driftThreshold Decimal          @map("drift_threshold") @db.Decimal(4, 1)
+  eventStatus    DriftEventStatus @default(open) @map("event_status")
+  emailStatus    EmailSentStatus  @default(pending) @map("email_status")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamp(6)
+  portfolio      Portfolio        @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  holding        Holding          @relation(fields: [holdingId], references: [id], onDelete: Restrict)
+  security       Security         @relation(fields: [securityId], references: [id], onDelete: Restrict)
+  alerts         Alert[]
+
+  @@index([portfolioId, detectedAt])
+  @@index([holdingId, detectedAt])
+  @@index([securityId, detectedAt])
+  @@index([eventStatus])
+  @@map("drift_events")
+}
+
+model Alert {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  portfolioId  String       @map("portfolio_id") @db.Uuid
+  driftEventId String?      @map("drift_event_id") @db.Uuid
+  type         AlertType    @default(drift_detected)
+  channel      AlertChannel
+  status       AlertStatus
+  title        String       @db.VarChar(255)
+  message      String       @db.Text
+  sentAt       DateTime?    @map("sent_at") @db.Timestamp(6)
+  readAt       DateTime?    @map("read_at") @db.Timestamp(6)
+  archivedAt   DateTime?    @map("archived_at") @db.Timestamp(6)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  portfolio    Portfolio    @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  driftEvent   DriftEvent?  @relation(fields: [driftEventId], references: [id], onDelete: SetNull)
+
+  @@index([userId, status])
+  @@index([portfolioId])
+  @@index([driftEventId])
+  @@index([type, channel])
+  @@map("alerts")
+}
