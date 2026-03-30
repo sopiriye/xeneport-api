@@ -128,13 +128,14 @@ model Portfolio {
   id                      String                        @id @default(uuid()) @db.Uuid
   userId                  String                        @map("user_id") @db.Uuid
   name                    String                        @db.VarChar(150)
-  description             String?                       @db.Text
+  description             String                        @default("NIL") @db.Text
   status                  PortfolioStatus               @default(active)
   driftMultiplier         Decimal                       @default(1.5) @map("drift_multiplier") @db.Decimal(3, 1)
   currentAssetCount       Int                           @default(0) @map("current_asset_count")
   currentTotalMarketValue Decimal                       @default(0) @map("current_total_market_value") @db.Decimal(20, 2)
   currentEqualWeight      Decimal                       @default(0) @map("current_equal_weight") @db.Decimal(4, 1)
   currentDriftThreshold   Decimal                       @default(0) @map("current_drift_threshold") @db.Decimal(4, 1)
+  alertCount              Decimal                       @default(0) @map("alert_count") @db.Decimal(10, 0)
   lastRecalculatedAt      DateTime?                     @map("last_recalculated_at") @db.Timestamp(6)
   createdAt               DateTime                      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt               DateTime                      @updatedAt @map("updated_at") @db.Timestamp(6)
