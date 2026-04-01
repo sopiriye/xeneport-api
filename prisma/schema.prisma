@@ -1,6 +1,5 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -57,20 +56,25 @@ enum SessionStatus {
   expired
 }
 
+enum OtpPurpose {
+  email_verification
+}
+
 model User {
-  id              String        @id @default(uuid()) @db.Uuid
-  firstName       String        @map("first_name") @db.VarChar(100)
-  lastName        String        @map("last_name") @db.VarChar(100)
-  email           String        @unique @db.VarChar(255)
-  passwordHash    String        @map("password_hash") @db.VarChar(255)
-  status          UserStatus    @default(active)
-  emailVerifiedAt DateTime?     @map("email_verified_at") @db.Timestamp(6)
-  lastLoginAt     DateTime?     @map("last_login_at") @db.Timestamp(6)
-  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
-  authSessions    AuthSession[]
-  portfolios      Portfolio[]
-  alerts          Alert[]
+  id               String            @id @default(uuid()) @db.Uuid
+  firstName        String            @map("first_name") @db.VarChar(100)
+  lastName         String            @map("last_name") @db.VarChar(100)
+  email            String            @unique @db.VarChar(255)
+  passwordHash     String            @map("password_hash") @db.VarChar(255)
+  status           UserStatus        @default(active)
+  emailVerifiedAt  DateTime?         @map("email_verified_at") @db.Timestamp(6)
+  lastLoginAt      DateTime?         @map("last_login_at") @db.Timestamp(6)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+  authSessions     AuthSession[]
+  verificationOtps VerificationOtp[]
+  portfolios       Portfolio[]
+  alerts           Alert[]
 
   @@map("users")
 }
@@ -88,6 +92,23 @@ model AuthSession {
   user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("auth_sessions")
+}
+
+model VerificationOtp {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  email      String     @db.VarChar(255)
+  purpose    OtpPurpose @default(email_verification)
+  codeHash   String     @map("code_hash") @db.VarChar(255)
+  expiresAt  DateTime   @map("expires_at") @db.Timestamp(6)
+  consumedAt DateTime?  @map("consumed_at") @db.Timestamp(6)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, expiresAt])
+  @@index([email, purpose, expiresAt])
+  @@map("verification_otps")
 }
 
 model Exchange {
