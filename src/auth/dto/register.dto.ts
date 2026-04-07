@@ -13,18 +13,18 @@ export class RegisterDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  firstName: string;
+  firstName: string = '';
 
   @ApiProperty({ example: 'Robinson' })
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  lastName: string;
+  lastName: string = '';
 
   @ApiProperty({ example: 'investor@example.com' })
   @IsEmail()
   @MaxLength(255)
-  email: string;
+  email: string = '';
 
   @ApiProperty({
     example: 'Str0ngPass!23',
@@ -39,5 +39,5 @@ export class RegisterDto {
     message:
       'password must include uppercase, lowercase, number, and special character',
   })
-  password: string;
+  password: string = '';
 }

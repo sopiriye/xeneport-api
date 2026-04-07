@@ -5,5 +5,5 @@ export class ResendOtpDto {
   @ApiProperty({ example: 'investor@example.com' })
   @IsEmail()
   @MaxLength(255)
-  email: string;
+  email: string = '';
 }
