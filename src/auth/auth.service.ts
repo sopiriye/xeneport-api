@@ -13,6 +13,7 @@ import {
   randomInt,
   scryptSync,
   timingSafeEqual,
+  randomUUID,
 } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { AuthenticatedUser } from './types/authenticated-user.interface';
@@ -187,7 +188,7 @@ export class AuthService {
       throw new ForbiddenException('Your account is not allowed to log in');
     }
 
-    const sessionId = cryptoRandomId();
+    const sessionId = randomUUID();
     const refreshToken = cryptoRandomId(48);
     const expiresAt = new Date(
       Date.now() + this.sessionTtlDays * 24 * 60 * 60 * 1000,
