@@ -58,8 +58,8 @@ export class AuthService {
 
     const user = await this.databaseService.user.create({
       data: {
-        firstName: payload.firstName.trim(),
-        lastName: payload.lastName.trim(),
+        firstName: this.capitalizeFirstLetter(payload.firstName.trim()),
+        lastName: this.capitalizeFirstLetter(payload.lastName.trim()),
         email: email,
         passwordHash: passwordHash,
       },
@@ -345,6 +345,11 @@ export class AuthService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  private capitalizeFirstLetter(str: string): string {
+    if (!str) return ''; // Handle empty strings
+    return str.charAt(0).toUpperCase() + str.slice(1);
   }
 }
 
