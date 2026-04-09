@@ -131,7 +131,6 @@ model Security {
   securityType               SecurityType                @default(stock) @map("security_type")
   ticker                     String                      @db.VarChar(30)
   companyName                String                      @map("company_name") @db.VarChar(255)
-  isActive                   Boolean                     @default(true) @map("is_active")
   createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt                  DateTime                    @updatedAt @map("updated_at") @db.Timestamp(6)
   exchange                   Exchange                    @relation(fields: [exchangeId], references: [id], onDelete: Restrict)
