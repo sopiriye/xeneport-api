@@ -293,7 +293,7 @@ export class AuthService {
 
   private hashPassword(password: string): string {
     const salt = randomBytes(16).toString('hex');
-    const derivedKey = scryptSync(password, salt, 64).toString('hex');
+    const derivedKey = scryptSync(password, salt, 32).toString('hex');
 
     return `${salt}:${derivedKey}`;
   }
