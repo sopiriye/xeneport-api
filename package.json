@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "import:prices": "node scripts/import-price-csv.js",
     "import:securities:ngx": "node scripts/import-ngx-securities.js",
     "start": "nest start",
     "start:dev": "nest start --watch",
