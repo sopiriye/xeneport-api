@@ -308,12 +308,9 @@ export class HoldingsService {
 
     const equalWeight =
       assetCount === 0 ? 0 : Number(((1 / assetCount) * 100).toFixed(1));
-    const driftThreshold =
-      assetCount === 0
-        ? 0
-        : Number(
-            (equalWeight * portfolio.driftMultiplier.toNumber()).toFixed(1),
-          );
+    const driftThreshold = Number(
+      (equalWeight * portfolio.driftMultiplier.toNumber()).toFixed(1),
+    );
 
     await tx.portfolio.update({
       where: { id: portfolioId },
