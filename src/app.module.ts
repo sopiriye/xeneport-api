@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AllocationModule } from './allocation/allocation.module';
 import { AuthModule } from './auth/auth.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -10,6 +11,7 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
+    AllocationModule,
     DatabaseModule,
     AuthModule,
     UsersModule,
@@ -21,3 +23,5 @@ import { UsersModule } from './users/users.module';
   providers: [AppService],
 })
 export class AppModule {}
+
+//i am still yet to read all the swagger schema in the whole codebase
