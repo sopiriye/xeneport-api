@@ -305,7 +305,7 @@ export class AuthService {
       return false;
     }
 
-    const derivedKey = scryptSync(value, salt, 64);
+    const derivedKey = scryptSync(value, salt, 32);
     const storedKey = Buffer.from(originalHash, 'hex');
 
     if (derivedKey.length !== storedKey.length) {
@@ -316,10 +316,7 @@ export class AuthService {
   }
 
   private hashValue(value: string): string {
-    const salt = randomBytes(16).toString('hex');
-    const derivedKey = scryptSync(value, salt, 64).toString('hex');
-
-    return `${salt}:${derivedKey}`;
+    return this.hashPassword(value);
   }
 
   private toPublicUser(user: {
