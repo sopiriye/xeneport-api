@@ -43,6 +43,8 @@ export class AuthService {
   ) {}
 
   async register(payload: RegisterDto) {
+    // register route:
+    // Normalize the email and reject registration when the account already exists.
     const email = this.normalizeEmail(payload.email);
 
     const existingUser = await this.databaseService.user.findUnique({
@@ -54,6 +56,8 @@ export class AuthService {
       throw new ConflictException('An account with this email already exists');
     }
 
+    // register route:
+    // Create the user account with a hashed password before issuing the email-verification OTP.
     const passwordHash = this.hashPassword(payload.password);
 
     const user = await this.databaseService.user.create({
@@ -67,6 +71,8 @@ export class AuthService {
 
     const otpCode = await this.issueVerificationOtp(user.id, user.email);
 
+    // register route:
+    // Return the public user payload and expose the OTP preview only outside production.
     return {
       message:
         'Registration successful. Verify the OTP sent to your email address before logging in.',
@@ -76,6 +82,8 @@ export class AuthService {
   }
 
   async verifyOtp(payload: VerifyOtpDto) {
+    // verifyOtp route:
+    // Resolve the user and verify that email verification is still pending for the submitted email address.
     const email = this.normalizeEmail(payload.email);
 
     const user = await this.databaseService.user.findUnique({
@@ -90,6 +98,8 @@ export class AuthService {
       throw new BadRequestException('Email has already been verified');
     }
 
+    // verifyOtp route:
+    // Load the latest unconsumed verification OTP and reject missing, expired, or invalid codes.
     const otpRecord = await this.databaseService.verificationOtp.findFirst({
       where: {
         email,
@@ -113,6 +123,8 @@ export class AuthService {
       throw new BadRequestException('Invalid OTP');
     }
 
+    // verifyOtp route:
+    // Mark the email as verified, consume the matched OTP, and remove any other outstanding verification OTP records.
     await this.databaseService.$transaction([
       this.databaseService.user.update({
         where: { id: user.id },
@@ -140,6 +152,8 @@ export class AuthService {
       where: { id: user.id },
     });
 
+    // verifyOtp route:
+    // Return the verified public user payload once the verification transaction has completed.
     return {
       message: 'Email verified successfully. You can now log in.',
       user: this.toPublicUser(verifiedUser),
@@ -147,6 +161,8 @@ export class AuthService {
   }
 
   async resendOtp(payload: ResendOtpDto) {
+    // resendOtp route:
+    // Resolve the user account and ensure email verification is still pending before rotating the OTP.
     const email = this.normalizeEmail(payload.email);
 
     const user = await this.databaseService.user.findUnique({
@@ -163,6 +179,8 @@ export class AuthService {
 
     const otpCode = await this.issueVerificationOtp(user.id, user.email);
 
+    // resendOtp route:
+    // Return the resend confirmation and include the OTP preview only outside production.
     return {
       message: 'A new OTP has been sent to your email address.',
       ...(this.isProduction ? {} : { otpPreview: otpCode }),
@@ -170,6 +188,8 @@ export class AuthService {
   }
 
   async login(payload: LoginDto) {
+    // login route:
+    // Resolve the user and validate the submitted credentials against the stored password hash.
     const email = this.normalizeEmail(payload.email);
 
     const user = await this.databaseService.user.findUnique({
@@ -188,6 +208,8 @@ export class AuthService {
       throw new ForbiddenException('Your account is not allowed to log in');
     }
 
+    // login route:
+    // Create a new authenticated session and update the user's last-login timestamp.
     const sessionId = randomUUID();
     const refreshToken = cryptoRandomId(48);
     const expiresAt = new Date(
@@ -217,6 +239,8 @@ export class AuthService {
       sid: sessionId,
     });
 
+    // login route:
+    // Return the signed bearer token and the public user payload for the authenticated session.
     return {
       message: 'Login successful',
       accessToken: accessToken,
@@ -230,6 +254,8 @@ export class AuthService {
   }
 
   async logout(currentUser: AuthenticatedUser) {
+    // logout route:
+    // Revoke the currently authenticated session so the bearer token can no longer represent an active session.
     await this.databaseService.authSession.updateMany({
       where: {
         id: currentUser.sessionId,
@@ -248,6 +274,8 @@ export class AuthService {
   }
 
   private async issueVerificationOtp(userId: string, email: string) {
+    // issueVerificationOtp helper:
+    // Generate a fresh OTP, invalidate any existing active verification OTP records, and persist the new one.
     const otpCode = this.generateOtp();
     const expiresAt = new Date(Date.now() + this.otpTtlMinutes * 60 * 1000);
 
@@ -330,6 +358,8 @@ export class AuthService {
     createdAt: Date;
     updatedAt: Date;
   }) {
+    // toPublicUser helper:
+    // Strip internal authentication fields and expose the user payload that is safe to return from auth endpoints.
     return {
       id: user.id,
       firstName: user.firstName,

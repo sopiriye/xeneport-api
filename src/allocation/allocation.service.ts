@@ -10,6 +10,8 @@ export class AllocationService {
     currentUser: AuthenticatedUser,
     portfolioId: string,
   ) {
+    // getPortfolioAllocation route:
+    // Load the authenticated user's portfolio together with the cached allocation summary fields maintained by the price refresh flow.
     const portfolio = await this.databaseService.portfolio.findFirst({
       where: {
         id: portfolioId,
@@ -34,6 +36,8 @@ export class AllocationService {
       throw new NotFoundException('Portfolio was not found');
     }
 
+    // getPortfolioAllocation route:
+    // Load all holdings in the portfolio and include the related security and exchange metadata needed for the allocation response.
     const holdings = await this.databaseService.holding.findMany({
       where: {
         portfolioId: portfolio.id,
@@ -48,6 +52,8 @@ export class AllocationService {
       },
     });
 
+    // getPortfolioAllocation route:
+    // Shape the per-holding allocation rows by reading the cached market values and weights already stored on the holdings table.
     const allocations = holdings.map((holding) => {
       return {
         holdingId: holding.id,
@@ -70,6 +76,8 @@ export class AllocationService {
       };
     });
 
+    // getPortfolioAllocation route:
+    // Return the portfolio allocation payload with both portfolio-level summary fields and per-holding allocation rows.
     return {
       portfolio: {
         id: portfolio.id,

@@ -14,6 +14,8 @@ export class DatabaseService
 {
   private readonly logger = new Logger(DatabaseService.name);
   constructor() {
+    // DatabaseService lifecycle:
+    // Validate the runtime database configuration before constructing the Prisma client adapter.
     const databaseUrl = process.env.DATABASE_URL;
 
     if (!databaseUrl) {
@@ -26,11 +28,15 @@ export class DatabaseService
   }
 
   async onModuleInit(): Promise<void> {
+    // DatabaseService lifecycle:
+    // Establish the Prisma database connection when the Nest module boots.
     await this.$connect();
     this.logger.log('Database connection established');
   }
 
   async onModuleDestroy(): Promise<void> {
+    // DatabaseService lifecycle:
+    // Close the Prisma database connection gracefully during Nest application shutdown.
     await this.$disconnect();
     this.logger.log('Database connection closed');
   }

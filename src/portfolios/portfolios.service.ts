@@ -17,6 +17,8 @@ export class PortfoliosService {
 
   async create(currentUser: AuthenticatedUser, payload: CreatePortfolioDto) {
     try {
+      // create route:
+      // Create the portfolio for the authenticated user after normalizing optional description and drift-multiplier input.
       const portfolio = await this.databaseService.portfolio.create({
         data: {
           userId: currentUser.userId,
@@ -31,11 +33,15 @@ export class PortfoliosService {
         portfolio: this.toPortfolioResponse(portfolio),
       };
     } catch (error) {
+      // create route:
+      // Translate unique-name violations into the API-friendly conflict response expected by the portfolio endpoint.
       this.handleUniqueNameError(error);
     }
   }
 
   async findAll(currentUser: AuthenticatedUser, query: ListPortfoliosQueryDto) {
+    // findAll route:
+    // Derive pagination values and Prisma filters for the authenticated user's portfolio listing endpoint.
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const skip = (page - 1) * limit;
@@ -52,6 +58,8 @@ export class PortfoliosService {
         : {}),
     };
 
+    // findAll route:
+    // Load the paginated portfolios and total count together so the response can include pagination metadata.
     const [portfolios, total] = await this.databaseService.$transaction([
       this.databaseService.portfolio.findMany({
         where,
@@ -64,6 +72,8 @@ export class PortfoliosService {
 
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
+    // findAll route:
+    // Return normalized portfolio rows together with the final pagination and applied-filter metadata.
     return {
       data: portfolios.map((portfolio) => this.toPortfolioResponse(portfolio)),
       meta: {
@@ -82,6 +92,8 @@ export class PortfoliosService {
   }
 
   async findOne(currentUser: AuthenticatedUser, portfolioId: string) {
+    // findOne route:
+    // Resolve the owned portfolio and return its normalized API response payload.
     const portfolio = await this.findOwnedPortfolio(
       currentUser.userId,
       portfolioId,
@@ -95,6 +107,8 @@ export class PortfoliosService {
     portfolioId: string,
     payload: UpdateDriftMultiplierDto,
   ) {
+    // updateDriftMultiplier route:
+    // Resolve the owned portfolio and reject updates against archived portfolios.
     const portfolio = await this.findOwnedPortfolio(
       currentUser.userId,
       portfolioId,
@@ -106,6 +120,8 @@ export class PortfoliosService {
       );
     }
 
+    // updateDriftMultiplier route:
+    // Persist the new drift multiplier and return the updated normalized portfolio payload.
     const updatedPortfolio = await this.databaseService.portfolio.update({
       where: { id: portfolioId },
       data: {
@@ -120,6 +136,8 @@ export class PortfoliosService {
   }
 
   async remove(currentUser: AuthenticatedUser, portfolioId: string) {
+    // remove route:
+    // Resolve the owned portfolio and reject duplicate archive operations.
     const portfolio = await this.findOwnedPortfolio(
       currentUser.userId,
       portfolioId,
@@ -129,6 +147,8 @@ export class PortfoliosService {
       throw new BadRequestException('Portfolio has already been archived');
     }
 
+    // remove route:
+    // Soft-delete the portfolio by switching its status to archived so historical state is preserved.
     const archivedPortfolio = await this.databaseService.portfolio.update({
       where: { id: portfolioId },
       data: {
@@ -143,6 +163,8 @@ export class PortfoliosService {
   }
 
   private async findOwnedPortfolio(userId: string, portfolioId: string) {
+    // findOwnedPortfolio helper:
+    // Resolve a portfolio only when it belongs to the supplied user, otherwise raise a not-found response.
     const portfolio = await this.databaseService.portfolio.findFirst({
       where: {
         id: portfolioId,
@@ -158,6 +180,8 @@ export class PortfoliosService {
   }
 
   private normalizeDescription(description?: string) {
+    // normalizeDescription helper:
+    // Collapse empty descriptions to the persisted sentinel value used by this codebase.
     if (!description || description.trim().length === 0) {
       return 'NIL';
     }
@@ -166,6 +190,8 @@ export class PortfoliosService {
   }
 
   private toDecimal(value: number) {
+    // toDecimal helper:
+    // Persist numeric drift-multiplier input using the one-decimal precision expected by the schema.
     return new Prisma.Decimal(value.toFixed(1));
   }
 
@@ -185,6 +211,8 @@ export class PortfoliosService {
     createdAt: Date;
     updatedAt: Date;
   }) {
+    // toPortfolioResponse helper:
+    // Convert decimals and sentinel description values into the portfolio response shape returned by the API.
     return {
       id: portfolio.id,
       userId: portfolio.userId,
@@ -205,6 +233,8 @@ export class PortfoliosService {
   }
 
   private handleUniqueNameError(error: unknown): never {
+    // handleUniqueNameError helper:
+    // Map Prisma unique-constraint failures to the portfolio-specific conflict response used by the API.
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'

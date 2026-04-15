@@ -1,5 +1,5 @@
 import {
-  BadRequestException,
+  // BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -29,6 +29,8 @@ export class PricesService {
     _currentUser: AuthenticatedUser,
     ticker: string,
   ) {
+    // getLatestPriceByTicker route:
+    // Normalize the ticker and load the matching security together with its latest stored price row.
     const normalizedTicker = ticker.trim().toUpperCase();
 
     const security = await this.databaseService.security.findFirst({
@@ -56,6 +58,8 @@ export class PricesService {
       throw new NotFoundException('No price data exists for this ticker');
     }
 
+    // getLatestPriceByTicker route:
+    // Return the latest stored price payload with security and exchange metadata.
     return {
       ticker: security.ticker,
       companyName: security.companyName,
@@ -78,6 +82,8 @@ export class PricesService {
     currentUser: AuthenticatedUser,
     payload: RefreshPricesDto,
   ) {
+    // refreshPrices route:
+    // Resolve the active portfolios that belong to the authenticated user and scope the refresh to one portfolio when requested.
     const portfolioWhere: Prisma.PortfolioWhereInput = {
       userId: currentUser.userId,
       status: 'active',
@@ -109,6 +115,8 @@ export class PricesService {
     //   portfolios.map((portfolio) => [portfolio.id, portfolio]),
     // );
 
+    // refreshPrices route:
+    // Load every holding in scope because holdings are the rows that will receive refreshed market values and weights.
     const holdings = await this.databaseService.holding.findMany({
       where: {
         portfolioId: {
@@ -124,6 +132,8 @@ export class PricesService {
     });
 
     if (holdings.length === 0) {
+      // refreshPrices route:
+      // Reset cached portfolio market values and weights when no holdings exist for the selected portfolios.
       await this.databaseService.$transaction(
         portfolios.map((portfolio) =>
           this.databaseService.portfolio.update({
@@ -147,6 +157,8 @@ export class PricesService {
       };
     }
 
+    // refreshPrices route:
+    // Load the latest price per security and perform the first pass that derives market value totals per portfolio.
     const latestPrices = await this.getLatestPricesForSecurities(
       holdings.map((holding) => holding.securityId),
     );
@@ -158,6 +170,9 @@ export class PricesService {
     const preliminaryHoldings = holdings.map((holding) =>
       this.buildHoldingRefreshData(holding, latestPriceMap, totalsByPortfolio),
     );
+
+    // refreshPrices route:
+    // Perform the second pass that converts each holding market value into a portfolio-relative allocation weight.
     const updatedHoldings = preliminaryHoldings.map((holding) => {
       const portfolioTotal = totalsByPortfolio.get(holding.portfolioId) ?? 0;
 
@@ -189,6 +204,8 @@ export class PricesService {
     //   };
     // });
 
+    // refreshPrices route:
+    // Build the cached portfolio summary values that will be persisted after all holding-level calculations are complete.
     const portfolioUpdates = portfolios.map((portfolio) =>
       this.buildPortfolioRefreshData(
         portfolio.id,
@@ -198,6 +215,8 @@ export class PricesService {
       ),
     );
 
+    // refreshPrices route:
+    // Persist all refreshed holding and portfolio cache fields inside one transaction so the allocation state stays consistent.
     await this.databaseService.$transaction(async (tx) => {
       for (const holding of updatedHoldings) {
         await tx.holding.update({
@@ -234,6 +253,8 @@ export class PricesService {
       }
     });
 
+    // refreshPrices route:
+    // Return the refresh summary showing how many portfolios, holdings, and latest price rows participated in the recalculation.
     return {
       message: 'Portfolios refreshed successfully',
       refreshedPortfolios: portfolios.length,
@@ -243,6 +264,8 @@ export class PricesService {
   }
 
   private async getLatestPricesForSecurities(securityIds: string[]) {
+    // getLatestPricesForSecurities helper:
+    // Query the latest price row per security directly from Postgres using a distinct-on strategy.
     const uniqueSecurityIds = [...new Set(securityIds)];
 
     if (uniqueSecurityIds.length === 0) {
@@ -265,6 +288,8 @@ export class PricesService {
     latestPriceMap: Map<string, LatestPriceRow>,
     totalsByPortfolio: Map<string, number>,
   ) {
+    // buildHoldingRefreshData helper:
+    // Derive holding-level market value from the latest price and accumulate running portfolio totals for the later weight pass.
     const latestPrice = latestPriceMap.get(holding.securityId);
     const price = latestPrice ? latestPrice.price.toNumber() : 0;
     const marketValue = holding.totalShares.toNumber() * price;
@@ -291,6 +316,8 @@ export class PricesService {
     holdings: HoldingWithSecurity[],
     totalsByPortfolio: Map<string, number>,
   ) {
+    // buildPortfolioRefreshData helper:
+    // Derive cached portfolio summary fields from the refreshed holdings and the configured drift multiplier.
     const holdingsInPortfolio = holdings.filter(
       (holding) => holding.portfolioId === portfolioId,
     );
@@ -315,6 +342,8 @@ export class PricesService {
   }
 
   private roundTo(value: number, decimals: number) {
+    // roundTo helper:
+    // Centralize rounding so cached market values and weights are persisted with consistent precision.
     return Number(value.toFixed(decimals));
   }
 }

@@ -16,6 +16,8 @@ export class HoldingsService {
   constructor(private readonly databaseService: DatabaseService) {}
 
   async create(currentUser: AuthenticatedUser, payload: CreateHoldingDto) {
+    // create route:
+    // Validate portfolio ownership and mutability first before resolving the referenced security ticker.
     const portfolio = await this.findOwnedPortfolio(
       currentUser.userId,
       payload.portfolioId, // i think the frontend should send the portfolioId in the payload instead of the query, as it's a required field for creating a holding and it keeps the endpoint cleaner without mixing query and body parameters
@@ -24,6 +26,8 @@ export class HoldingsService {
 
     const security = await this.findSecurityByTicker(payload.ticker);
 
+    // create route:
+    // Prevent duplicate holdings for the same security inside the selected portfolio.
     const existingHolding = await this.databaseService.holding.findFirst({
       where: {
         portfolioId: portfolio.id,
@@ -38,6 +42,8 @@ export class HoldingsService {
       );
     }
 
+    // create route:
+    // Create the holding and refresh the cached portfolio allocation fields in the same transaction.
     const createdHolding = await this.databaseService.$transaction(
       async (tx) => {
         const holding = await tx.holding.create({
@@ -74,12 +80,16 @@ export class HoldingsService {
     holdingId: string,
     payload: UpdateHoldingDto,
   ) {
+    // update route:
+    // Confirm ownership and portfolio mutability before updating the holding share quantity.
     const existingHolding = await this.findOwnedHolding(
       currentUser.userId,
       holdingId,
     );
     this.ensurePortfolioIsActive(existingHolding.portfolio.status);
 
+    // update route:
+    // Persist the new share quantity and refresh the holding transaction timestamp for auditability.
     const updatedHolding = await this.databaseService.holding.update({
       where: { id: holdingId },
       data: {
@@ -103,9 +113,13 @@ export class HoldingsService {
   // ...endPoint END  ...
 
   async remove(currentUser: AuthenticatedUser, holdingId: string) {
+    // remove route:
+    // Confirm the holding belongs to the authenticated user and that its portfolio can still be modified.
     const holding = await this.findOwnedHolding(currentUser.userId, holdingId);
     this.ensurePortfolioIsActive(holding.portfolio.status);
 
+    // remove route:
+    // Delete the holding and refresh the cached portfolio allocation fields in the same transaction.
     const deletedHolding = await this.databaseService.$transaction(
       async (tx) => {
         const removed = await tx.holding.delete({
@@ -137,6 +151,8 @@ export class HoldingsService {
     portfolioId: string,
     query: ListHoldingsQueryDto,
   ) {
+    // findByPortfolio route:
+    // Confirm portfolio ownership, then derive the pagination window and optional security search filters.
     const portfolio = await this.findOwnedPortfolio(
       currentUser.userId,
       portfolioId,
@@ -170,6 +186,8 @@ export class HoldingsService {
         : {}),
     };
 
+    // findByPortfolio route:
+    // Load the paginated holdings and total count together so the response can include pagination metadata.
     const [holdings, total] = await this.databaseService.$transaction([
       this.databaseService.holding.findMany({
         where,
@@ -189,6 +207,8 @@ export class HoldingsService {
 
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
+    // findByPortfolio route:
+    // Return the portfolio header, normalized holding rows, and pagination metadata for the holdings listing endpoint.
     return {
       portfolio: {
         id: portfolio.id,
@@ -213,6 +233,8 @@ export class HoldingsService {
   // ...endPoint END  ...
 
   private async findOwnedPortfolio(userId: string, portfolioId: string) {
+    // findOwnedPortfolio helper:
+    // Resolve a portfolio only when it belongs to the supplied user, otherwise raise a not-found response.
     const portfolio = await this.databaseService.portfolio.findFirst({
       where: {
         id: portfolioId,
@@ -234,6 +256,8 @@ export class HoldingsService {
   }
 
   private async findSecurityByTicker(ticker: string) {
+    // findSecurityByTicker helper:
+    // Normalize the ticker and load the predefined security record that holdings are allowed to reference.
     const normalizedTicker = ticker.trim().toUpperCase();
 
     const security = await this.databaseService.security.findFirst({
@@ -255,6 +279,8 @@ export class HoldingsService {
   }
 
   private async findOwnedHolding(userId: string, holdingId: string) {
+    // findOwnedHolding helper:
+    // Resolve a holding only when it belongs to a portfolio owned by the supplied user.
     const holding = await this.databaseService.holding.findFirst({
       where: {
         id: holdingId,
@@ -285,6 +311,8 @@ export class HoldingsService {
   }
 
   private ensurePortfolioIsActive(status: string) {
+    // ensurePortfolioIsActive helper:
+    // Block write operations against archived portfolios so historical data remains immutable.
     if (status === 'archived') {
       throw new BadRequestException('Archived portfolios cannot be modified');
     }
@@ -294,6 +322,8 @@ export class HoldingsService {
     tx: Prisma.TransactionClient,
     portfolioId: string,
   ) {
+    // syncPortfolioCachedFields helper:
+    // Recalculate asset count, equal weight, and drift threshold whenever holdings are added or removed.
     const [portfolio, assetCount] = await Promise.all([
       tx.portfolio.findUniqueOrThrow({
         where: { id: portfolioId },
@@ -343,6 +373,8 @@ export class HoldingsService {
       };
     };
   }) {
+    // toHoldingResponse helper:
+    // Convert decimals and related security metadata into the holding response shape returned by the API.
     return {
       id: holding.id,
       portfolioId: holding.portfolioId,

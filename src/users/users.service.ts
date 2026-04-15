@@ -12,6 +12,8 @@ export class UsersService {
   constructor(private readonly databaseService: DatabaseService) {}
 
   async getMe(currentUser: AuthenticatedUser) {
+    // getMe route:
+    // Load the authenticated user's account record and reject stale tokens that reference a missing user.
     const user = await this.databaseService.user.findUnique({
       where: { id: currentUser.userId },
     });
@@ -20,16 +22,22 @@ export class UsersService {
       throw new NotFoundException('User account was not found');
     }
 
+    // getMe route:
+    // Return the normalized public profile payload for the authenticated user.
     return this.toPublicUser(user);
   }
 
   async updateMe(currentUser: AuthenticatedUser, payload: UpdateProfileDto) {
+    // updateMe route:
+    // Reject empty profile updates before touching the database.
     if (!payload.firstName && !payload.lastName) {
       throw new BadRequestException(
         'At least one profile field must be provided for update',
       );
     }
 
+    // updateMe route:
+    // Confirm that the authenticated user account still exists before applying profile changes.
     const user = await this.databaseService.user.findUnique({
       where: { id: currentUser.userId },
       select: { id: true },
@@ -39,6 +47,8 @@ export class UsersService {
       throw new NotFoundException('User account was not found');
     }
 
+    // updateMe route:
+    // Persist the trimmed profile fields that were provided and return the updated public profile payload.
     const updatedUser = await this.databaseService.user.update({
       where: { id: currentUser.userId },
       data: {
@@ -64,6 +74,8 @@ export class UsersService {
     createdAt: Date;
     updatedAt: Date;
   }) {
+    // toPublicUser helper:
+    // Strip internal fields and return the public profile shape shared across user-facing endpoints.
     return {
       id: user.id,
       firstName: user.firstName,
