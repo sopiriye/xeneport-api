@@ -15,6 +15,7 @@ import {
   timingSafeEqual,
   randomUUID,
 } from 'node:crypto';
+import { AlertsEmailService } from '../alerts/alerts-email.service';
 import { DatabaseService } from '../database/database.service';
 import { AuthenticatedUser } from './types/authenticated-user.interface';
 import { LoginDto } from './dto/login.dto';
@@ -39,6 +40,7 @@ export class AuthService {
 
   constructor(
     private readonly databaseService: DatabaseService,
+    private readonly alertsEmailService: AlertsEmailService,
     private readonly jwtService: JwtService,
   ) {}
 
@@ -69,7 +71,11 @@ export class AuthService {
       },
     });
 
-    const otpCode = await this.issueVerificationOtp(user.id, user.email);
+    const otpCode = await this.issueVerificationOtp(
+      user.id,
+      user.email,
+      user.firstName,
+    );
 
     // register route:
     // Return the public user payload and expose the OTP preview only outside production.
@@ -177,7 +183,11 @@ export class AuthService {
       throw new BadRequestException('Email has already been verified');
     }
 
-    const otpCode = await this.issueVerificationOtp(user.id, user.email);
+    const otpCode = await this.issueVerificationOtp(
+      user.id,
+      user.email,
+      user.firstName,
+    );
 
     // resendOtp route:
     // Return the resend confirmation and include the OTP preview only outside production.
@@ -273,9 +283,13 @@ export class AuthService {
     };
   }
 
-  private async issueVerificationOtp(userId: string, email: string) {
+  private async issueVerificationOtp(
+    userId: string,
+    email: string,
+    recipientName: string,
+  ) {
     // issueVerificationOtp helper:
-    // Generate a fresh OTP, invalidate any existing active verification OTP records, and persist the new one.
+    // Generate a fresh OTP, invalidate any existing active verification OTP records, persist the new one, and send it by email.
     const otpCode = this.generateOtp();
     const expiresAt = new Date(Date.now() + this.otpTtlMinutes * 60 * 1000);
 
@@ -297,7 +311,14 @@ export class AuthService {
       },
     });
 
-    this.logger.log(`OTP for ${email}: ${otpCode}`);
+    await this.alertsEmailService.sendVerificationOtpEmail({
+      to: email,
+      recipientName,
+      otpCode,
+      expiresInMinutes: this.otpTtlMinutes,
+    });
+
+    this.logger.log(`Verification OTP email sent to ${email}`);
 
     return otpCode;
   }

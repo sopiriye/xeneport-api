@@ -11,6 +11,13 @@ type DriftEmailPayload = {
   driftThreshold: number;
 };
 
+type VerificationOtpEmailPayload = {
+  to: string;
+  recipientName: string;
+  otpCode: string;
+  expiresInMinutes: number;
+};
+
 @Injectable()
 export class AlertsEmailService {
   private readonly logger = new Logger(AlertsEmailService.name);
@@ -49,6 +56,33 @@ export class AlertsEmailService {
     this.logger.log(
       `Drift alert email sent to ${payload.to} for ${payload.ticker}`,
     );
+  }
+
+  async sendVerificationOtpEmail(payload: VerificationOtpEmailPayload) {
+    // sendVerificationOtpEmail flow:
+    // Validate the Gmail SMTP configuration and derive the sender metadata for the outbound OTP email.
+    if (!this.isConfigured()) {
+      throw new Error(
+        'Gmail email configuration is missing. Set GMAIL_USER and GMAIL_APP_PASSWORD.',
+      );
+    }
+
+    const transporter = this.getTransporter();
+    const fromEmail = process.env.ALERTS_FROM_EMAIL ?? process.env.GMAIL_USER;
+    const fromName = process.env.ALERTS_FROM_NAME ?? 'Portfolio Drift Monitor';
+    const subject = 'Verify your email address';
+
+    // sendVerificationOtpEmail flow:
+    // Deliver both the text and HTML variants of the verification email through the cached Nodemailer transporter.
+    await transporter.sendMail({
+      from: `"${fromName}" <${fromEmail}>`,
+      to: payload.to,
+      subject,
+      text: this.buildVerificationOtpTextBody(payload),
+      html: this.buildVerificationOtpHtmlBody(payload),
+    });
+
+    this.logger.log(`Verification OTP email sent to ${payload.to}`);
   }
 
   private getTransporter() {
@@ -107,6 +141,41 @@ export class AlertsEmailService {
           <strong>${payload.driftThreshold.toFixed(1)}%</strong>.
         </p>
         <p>Please review your portfolio allocation in the application.</p>
+        <p>Portfolio Drift Monitor</p>
+      </div>
+    `;
+  }
+
+  private buildVerificationOtpTextBody(payload: VerificationOtpEmailPayload) {
+    // buildVerificationOtpTextBody helper:
+    // Compose the plain-text email body for email-verification OTP delivery.
+    return [
+      `Hello ${payload.recipientName},`,
+      '',
+      'Use the OTP below to verify your email address:',
+      '',
+      payload.otpCode,
+      '',
+      `This OTP expires in ${payload.expiresInMinutes} minute(s).`,
+      '',
+      'If you did not create this account, you can ignore this email.',
+      '',
+      'Portfolio Drift Monitor',
+    ].join('\n');
+  }
+
+  private buildVerificationOtpHtmlBody(payload: VerificationOtpEmailPayload) {
+    // buildVerificationOtpHtmlBody helper:
+    // Compose the HTML email body for email-verification OTP delivery.
+    return `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">
+        <p>Hello ${escapeHtml(payload.recipientName)},</p>
+        <p>Use the OTP below to verify your email address:</p>
+        <p style="font-size: 28px; font-weight: 700; letter-spacing: 6px; margin: 24px 0;">
+          ${escapeHtml(payload.otpCode)}
+        </p>
+        <p>This OTP expires in <strong>${payload.expiresInMinutes} minute(s)</strong>.</p>
+        <p>If you did not create this account, you can ignore this email.</p>
         <p>Portfolio Drift Monitor</p>
       </div>
     `;

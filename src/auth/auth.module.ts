@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import type { JwtSignOptions } from '@nestjs/jwt';
+import { AlertsEmailModule } from '../alerts/alerts-email.module';
 import { DatabaseModule } from '../database/database.module';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -14,6 +15,7 @@ const jwtSignOptions: JwtSignOptions = {
 @Module({
   imports: [
     DatabaseModule,
+    AlertsEmailModule,
     JwtModule.register({
       global: false,
       secret: process.env.JWT_SECRET ?? 'development-jwt-secret-change-me',
