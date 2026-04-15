@@ -8,5 +8,6 @@ import { PricesService } from './prices.service';
   imports: [DatabaseModule, AuthModule],
   controllers: [PricesController],
   providers: [PricesService],
+  exports: [PricesService],
 })
 export class PricesModule {}

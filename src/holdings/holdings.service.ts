@@ -7,13 +7,19 @@ import {
 import { Prisma } from '@prisma/client';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.interface';
 import { DatabaseService } from '../database/database.service';
+import { DriftService } from '../drift/drift.service';
+import { PricesService } from '../prices/prices.service';
 import { CreateHoldingDto } from './dto/create-holding.dto';
 import { ListHoldingsQueryDto } from './dto/list-holdings-query.dto';
 import { UpdateHoldingDto } from './dto/update-holding.dto';
 
 @Injectable()
 export class HoldingsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly pricesService: PricesService,
+    private readonly driftService: DriftService,
+  ) {}
 
   async create(currentUser: AuthenticatedUser, payload: CreateHoldingDto) {
     // create route:
@@ -68,6 +74,13 @@ export class HoldingsService {
       },
     );
 
+    // create route:
+    // Run the downstream price refresh and drift detection flows for the affected portfolio immediately after the holding write succeeds.
+    await this.refreshPortfolioStateAfterHoldingMutation(
+      currentUser,
+      portfolio.id,
+    );
+
     return {
       message: 'Holding created successfully',
       holding: this.toHoldingResponse(createdHolding),
@@ -105,6 +118,13 @@ export class HoldingsService {
       },
     });
 
+    // update route:
+    // Run the downstream price refresh and drift detection flows for the affected portfolio immediately after the holding write succeeds.
+    await this.refreshPortfolioStateAfterHoldingMutation(
+      currentUser,
+      existingHolding.portfolio.id,
+    );
+
     return {
       message: 'Holding updated successfully',
       holding: this.toHoldingResponse(updatedHolding),
@@ -137,6 +157,13 @@ export class HoldingsService {
 
         return removed;
       },
+    );
+
+    // remove route:
+    // Run the downstream price refresh and drift detection flows for the affected portfolio immediately after the holding write succeeds.
+    await this.refreshPortfolioStateAfterHoldingMutation(
+      currentUser,
+      holding.portfolioId,
     );
 
     return {
@@ -350,6 +377,23 @@ export class HoldingsService {
         currentDriftThreshold: new Prisma.Decimal(driftThreshold.toFixed(1)),
         lastRecalculatedAt: new Date(),
       },
+    });
+  }
+
+  private async refreshPortfolioStateAfterHoldingMutation(
+    currentUser: AuthenticatedUser,
+    portfolioId: string,
+  ) {
+    // refreshPortfolioStateAfterHoldingMutation helper:
+    // Re-run the price refresh flow first so holding and portfolio cache fields are current before drift detection reads them.
+    await this.pricesService.refreshPrices(currentUser, {
+      portfolioId,
+    });
+
+    // refreshPortfolioStateAfterHoldingMutation helper:
+    // Run drift detection for the same portfolio so open and resolved drift events stay aligned with the latest holding state.
+    await this.driftService.checkDrift(currentUser, {
+      portfolioId,
     });
   }
 
