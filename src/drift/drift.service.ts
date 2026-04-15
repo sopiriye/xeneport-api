@@ -1,17 +1,23 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { AlertsService } from '../alerts/alerts.service';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.interface';
 import { DatabaseService } from '../database/database.service';
 import { CheckDriftDto } from './dto/check-drift.dto';
 
 @Injectable()
 export class DriftService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly alertsService: AlertsService,
+  ) {}
 
   async getPortfolioDriftStatus(
     currentUser: AuthenticatedUser,
     portfolioId: string,
   ) {
+    // getPortfolioDriftStatus route:
+    // Load the authenticated user's portfolio-level drift configuration and cached allocation state.
     const portfolio = await this.databaseService.portfolio.findFirst({
       where: {
         id: portfolioId,
@@ -34,6 +40,8 @@ export class DriftService {
       throw new NotFoundException('Portfolio was not found');
     }
 
+    // getPortfolioDriftStatus route:
+    // Load the portfolio holdings together with the latest open drift-event context for each holding.
     const holdings = await this.databaseService.holding.findMany({
       where: {
         portfolioId: portfolio.id,
@@ -57,6 +65,8 @@ export class DriftService {
       },
     });
 
+    // getPortfolioDriftStatus route:
+    // Shape the drift-status response for each holding using cached weights and open-event state.
     const threshold = portfolio.currentDriftThreshold.toNumber();
     const items = holdings.map((holding) => {
       const currentWeight = holding.currentWeight.toNumber();
@@ -91,6 +101,8 @@ export class DriftService {
       };
     });
 
+    // getPortfolioDriftStatus route:
+    // Summarize the portfolio drift state and return the final endpoint response payload.
     const driftedHoldings = items.filter((item) => item.hasDrift);
 
     return {
@@ -115,6 +127,8 @@ export class DriftService {
   }
 
   async checkDrift(currentUser: AuthenticatedUser, payload: CheckDriftDto) {
+    // checkDrift route:
+    // Load the active portfolios owned by the authenticated user that should participate in drift checking.
     const portfolios = await this.databaseService.portfolio.findMany({
       where: {
         userId: currentUser.userId,
@@ -143,6 +157,8 @@ export class DriftService {
       };
     }
 
+    // checkDrift route:
+    // Load the holdings for the selected portfolios and isolate the holdings that currently exceed the drift threshold.
     const portfolioMap = new Map(
       portfolios.map((portfolio) => [portfolio.id, portfolio]),
     );
@@ -174,6 +190,57 @@ export class DriftService {
       );
     });
 
+    // checks those drift events that are no longer in drift and resolves them{
+    // checkDrift route:
+    // Compare the current candidate holdings against open drift events already in the database and resolve stale ones.
+    const candidateHoldingKeys = new Set(
+      candidateHoldings.map(
+        (holding) =>
+          `${holding.portfolioId}:${holding.id}:${holding.securityId}`,
+      ),
+    );
+
+    const openDriftEventsInScope =
+      await this.databaseService.driftEvent.findMany({
+        where: {
+          eventStatus: 'open',
+          portfolioId: {
+            in: portfolios.map((portfolio) => portfolio.id),
+          },
+        },
+        select: {
+          id: true,
+          portfolioId: true,
+          holdingId: true,
+          securityId: true,
+        },
+      });
+
+    const resolvedDriftEventIds = openDriftEventsInScope
+      .filter(
+        (event) =>
+          !candidateHoldingKeys.has(
+            `${event.portfolioId}:${event.holdingId}:${event.securityId}`,
+          ),
+      )
+      .map((event) => event.id);
+
+    if (resolvedDriftEventIds.length > 0) {
+      await this.databaseService.driftEvent.updateMany({
+        where: {
+          id: {
+            in: resolvedDriftEventIds,
+          },
+        },
+        data: {
+          eventStatus: 'resolved',
+        },
+      });
+    }
+    // end of drift event resolution block
+
+    // checkDrift route:
+    // Exit early when no holdings are currently in drift after stale open events have been resolved.
     if (candidateHoldings.length === 0) {
       return {
         message: 'Drift check completed successfully',
@@ -185,6 +252,8 @@ export class DriftService {
       };
     }
 
+    // checkDrift route:
+    // Detect which current drift candidates already have open events so only new drift cases create new records.
     const existingOpenEvents = await this.databaseService.driftEvent.findMany({
       where: {
         eventStatus: 'open',
@@ -206,16 +275,51 @@ export class DriftService {
       (holding) => !openHoldingIds.has(holding.id),
     );
 
+    const createdEvents: Array<{
+      id: string;
+      portfolioId: string;
+      securityId: string;
+      holdingId: string;
+      assetWeight: number;
+      equalWeight: number;
+      driftThreshold: number;
+      ticker: string;
+      companyName: string;
+    }> = [];
+
+    // checkDrift route:
+    // Create new drift-event records for fresh drift cases and collect the payload needed for downstream alert creation.
     if (eventsToCreate.length > 0) {
-      await this.databaseService.driftEvent.createMany({
-        data: eventsToCreate.map((holding) => {
-          const portfolio = portfolioMap.get(holding.portfolioId);
+      const holdingsById = new Map(
+        (
+          await this.databaseService.holding.findMany({
+            where: {
+              id: {
+                in: eventsToCreate.map((holding) => holding.id),
+              },
+            },
+            include: {
+              security: {
+                select: {
+                  ticker: true,
+                  companyName: true,
+                },
+              },
+            },
+          })
+        ).map((holding) => [holding.id, holding]),
+      );
 
-          if (!portfolio) {
-            throw new Error('Portfolio context missing during drift creation');
-          }
+      for (const holding of eventsToCreate) {
+        const portfolio = portfolioMap.get(holding.portfolioId);
+        const holdingDetail = holdingsById.get(holding.id);
 
-          return {
+        if (!portfolio || !holdingDetail) {
+          throw new Error('Drift context missing during event creation');
+        }
+
+        const createdEvent = await this.databaseService.driftEvent.create({
+          data: {
             portfolioId: holding.portfolioId,
             holdingId: holding.id,
             securityId: holding.securityId,
@@ -229,20 +333,46 @@ export class DriftService {
             driftThreshold: new Prisma.Decimal(
               portfolio.currentDriftThreshold.toNumber().toFixed(1),
             ),
-          };
-        }),
-      });
+          },
+        });
+
+        createdEvents.push({
+          id: createdEvent.id,
+          portfolioId: createdEvent.portfolioId,
+          securityId: createdEvent.securityId,
+          holdingId: createdEvent.holdingId,
+          assetWeight: createdEvent.assetWeight.toNumber(),
+          equalWeight: createdEvent.equalWeight.toNumber(),
+          driftThreshold: createdEvent.driftThreshold.toNumber(),
+          ticker: holdingDetail.security.ticker,
+          companyName: holdingDetail.security.companyName,
+        });
+      }
+
+      // checkDrift route:
+      // Hand off the newly created drift events to the alert module so alert history and notifications are generated immediately.
+      await this.alertsService.createAlertsForDriftEvents(
+        createdEvents.map((event) => ({
+          userId: currentUser.userId,
+          portfolioId: event.portfolioId,
+          driftEventId: event.id,
+          ticker: event.ticker,
+          companyName: event.companyName,
+          currentWeight: event.assetWeight,
+          driftThreshold: event.driftThreshold,
+        })),
+      );
     }
 
+    // checkDrift route:
+    // Return the final drift-check summary, including fresh events and already-open events that remained in drift.
     return {
       message: 'Drift check completed successfully',
       checkedPortfolios: portfolios.length,
       checkedHoldings: holdings.length,
       driftedHoldings: candidateHoldings.length,
-      createdEvents: eventsToCreate.length,
+      createdEvents: createdEvents.length,
       existingOpenEvents: candidateHoldings.length - eventsToCreate.length,
     };
   }
 }
-
-// the equal weight in the database does not seem to be important as a column.
