@@ -9,6 +9,7 @@ import { DriftModule } from './drift/drift.module';
 import { HoldingsModule } from './holdings/holdings.module';
 import { PortfoliosModule } from './portfolios/portfolios.module';
 import { PricesModule } from './prices/prices.module';
+import { SecuritiesModule } from './securities/securities.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { UsersModule } from './users/users.module';
     DatabaseModule,
     AuthModule,
     UsersModule,
+    SecuritiesModule,
     PortfoliosModule,
     HoldingsModule,
     PricesModule,

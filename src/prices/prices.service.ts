@@ -217,41 +217,48 @@ export class PricesService {
 
     // refreshPrices route:
     // Persist all refreshed holding and portfolio cache fields inside one transaction so the allocation state stays consistent.
-    await this.databaseService.$transaction(async (tx) => {
-      for (const holding of updatedHoldings) {
-        await tx.holding.update({
-          where: { id: holding.id },
-          data: {
-            currentMarketPrice: new Prisma.Decimal(
-              holding.currentMarketPrice.toFixed(2),
-            ),
-            currentMarketValue: new Prisma.Decimal(
-              holding.currentMarketValue.toFixed(2),
-            ),
-            currentWeight: new Prisma.Decimal(holding.currentWeight.toFixed(1)),
-          },
-        });
-      }
+    await this.databaseService.$transaction(
+      async (tx) => {
+        for (const holding of updatedHoldings) {
+          await tx.holding.update({
+            where: { id: holding.id },
+            data: {
+              currentMarketPrice: new Prisma.Decimal(
+                holding.currentMarketPrice.toFixed(2),
+              ),
+              currentMarketValue: new Prisma.Decimal(
+                holding.currentMarketValue.toFixed(2),
+              ),
+              currentWeight: new Prisma.Decimal(
+                holding.currentWeight.toFixed(1),
+              ),
+            },
+          });
+        }
 
-      for (const portfolio of portfolioUpdates) {
-        await tx.portfolio.update({
-          where: { id: portfolio.id },
-          data: {
-            currentAssetCount: portfolio.currentAssetCount,
-            currentTotalMarketValue: new Prisma.Decimal(
-              portfolio.currentTotalMarketValue.toFixed(2),
-            ),
-            currentEqualWeight: new Prisma.Decimal(
-              portfolio.currentEqualWeight.toFixed(1),
-            ),
-            currentDriftThreshold: new Prisma.Decimal(
-              portfolio.currentDriftThreshold.toFixed(1),
-            ),
-            lastRecalculatedAt: new Date(),
-          },
-        });
-      }
-    });
+        for (const portfolio of portfolioUpdates) {
+          await tx.portfolio.update({
+            where: { id: portfolio.id },
+            data: {
+              currentAssetCount: portfolio.currentAssetCount,
+              currentTotalMarketValue: new Prisma.Decimal(
+                portfolio.currentTotalMarketValue.toFixed(2),
+              ),
+              currentEqualWeight: new Prisma.Decimal(
+                portfolio.currentEqualWeight.toFixed(1),
+              ),
+              currentDriftThreshold: new Prisma.Decimal(
+                portfolio.currentDriftThreshold.toFixed(1),
+              ),
+              lastRecalculatedAt: new Date(),
+            },
+          });
+        }
+      },
+      {
+        timeout: 40000, // 40 seconds
+      },
+    );
 
     // refreshPrices route:
     // Return the refresh summary showing how many portfolios, holdings, and latest price rows participated in the recalculation.
