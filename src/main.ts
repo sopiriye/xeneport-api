@@ -23,18 +23,19 @@ async function bootstrap() {
     .filter(Boolean);
 
   app.enableCors({
-    origin: (origin, callback) => {
-      if (
-        !origin ||
-        allowedOrigins.includes('*') ||
-        allowedOrigins.includes(origin)
-      ) {
-        callback(null, true);
-        return;
-      }
+    // origin: (origin, callback) => {
+    //   if (
+    //     !origin ||
+    //     allowedOrigins.includes('*') ||
+    //     allowedOrigins.includes(origin)
+    //   ) {
+    //     callback(null, true);
+    //     return;
+    //   }
 
-      callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
-    },
+    //   callback(new Error(`Origin ${origin} is not allowed by CORS`), false);
+    // },
+    origin: true, // Allow all origins (for development only, consider restricting in production)
     credentials: true,
   });
   // end }
