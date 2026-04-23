@@ -30,6 +30,11 @@ lerna-debug.log*
 *.launch
 .settings/
 
+# ENV Import-Config
+prisma.config.ts
+
+
+
 # IDE - VSCode
 .vscode/*
 !.vscode/settings.json

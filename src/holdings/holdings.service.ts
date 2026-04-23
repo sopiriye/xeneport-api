@@ -142,6 +142,14 @@ export class HoldingsService {
     // Delete the holding and refresh the cached portfolio allocation fields in the same transaction.
     const deletedHolding = await this.databaseService.$transaction(
       async (tx) => {
+        // remove route:
+        // Clear drift-event records tied to this holding before deleting the holding because the drift_events relation restricts holding deletes.
+        await tx.driftEvent.deleteMany({
+          where: {
+            holdingId,
+          },
+        });
+
         const removed = await tx.holding.delete({
           where: { id: holdingId },
           include: {
@@ -156,6 +164,10 @@ export class HoldingsService {
         await this.syncPortfolioCachedFields(tx, holding.portfolioId);
 
         return removed;
+      },
+
+      {
+        timeout: 40000, // 40 seconds
       },
     );
 

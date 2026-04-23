@@ -96,6 +96,8 @@ export class DriftController {
     return this.driftService.getPortfolioDriftStatus(currentUser, portfolioId);
   }
 
+  // ... end for endpoint
+
   @Post('drift/check')
   @ApiOperation({
     summary: 'Check drift and create drift events',
