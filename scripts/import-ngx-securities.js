@@ -10,6 +10,8 @@ const DEFAULT_CSV_PATH =
 const DEFAULT_EXCHANGE_ID = '775ed46f-f383-45e2-8ec8-858a36ef4f68';
 
 async function main() {
+  // main flow:
+  // Resolve the fixed CSV path and exchange context, then validate that the database connection string exists.
   // const csvPath = path.resolve(process.argv[2] || DEFAULT_CSV_PATH);
   const csvPath = path.resolve(DEFAULT_CSV_PATH);
   // const exchangeId = process.argv[3] || DEFAULT_EXCHANGE_ID;
@@ -24,6 +26,8 @@ async function main() {
     throw new Error(`CSV file was not found at: ${csvPath}`);
   }
 
+  // main flow:
+  // Read and parse the CSV file, then validate the expected header shape before processing data rows.
   const csvContent = fs.readFileSync(csvPath, 'utf8');
   const rows = parseCsv(csvContent);
 
@@ -42,6 +46,8 @@ async function main() {
     throw new Error('CSV header must start with: Ticker,Company Name');
   }
 
+  // main flow:
+  // Normalize CSV rows into ticker and company-name pairs and reject incomplete rows early.
   const securities = dataRows
     .filter((row) => row.some((value) => value.trim().length > 0))
     .map((row, index) => {
@@ -63,6 +69,8 @@ async function main() {
   const dedupedSecurities = dedupeByTicker(securities);
   const client = new Client({ connectionString: databaseUrl });
 
+  // main flow:
+  // Open the database transaction, verify the referenced exchange exists, and upsert each unique security row.
   await client.connect();
 
   try {
@@ -118,6 +126,8 @@ async function main() {
 
     await client.query('COMMIT');
 
+    // main flow:
+    // Print the import summary after the transaction commits successfully.
     console.log(
       JSON.stringify(
         {
@@ -141,6 +151,8 @@ async function main() {
 }
 
 function dedupeByTicker(securities) {
+  // dedupeByTicker helper:
+  // Keep only the last occurrence of each ticker so reruns process one row per unique security.
   const dedupedMap = new Map();
 
   for (const security of securities) {
@@ -151,6 +163,8 @@ function dedupeByTicker(securities) {
 }
 
 function parseCsv(content) {
+  // parseCsv helper:
+  // Parse CSV content with support for quoted fields and Windows or Unix line endings.
   const rows = [];
   let currentRow = [];
   let currentField = '';
@@ -202,6 +216,8 @@ function parseCsv(content) {
 }
 
 main().catch((error) => {
+  // main flow:
+  // Surface the failure reason and exit with a non-zero status so the script fails clearly in the terminal.
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });

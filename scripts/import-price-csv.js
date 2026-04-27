@@ -6,6 +6,8 @@ const crypto = require('node:crypto');
 const { Client } = require('pg');
 
 async function main() {
+  // main flow:
+  // Resolve the CLI arguments first and fail early when the required CSV path is missing.
   const csvPathArg = process.argv[2];
   const priceDateArg = process.argv[3];
 
@@ -27,6 +29,8 @@ async function main() {
     throw new Error(`CSV file was not found at: ${csvPath}`);
   }
 
+  // main flow:
+  // Resolve the pricing timestamp, parse the CSV file, and validate that the header exposes ticker and price columns.
   const pricingTimestamp = resolvePricingTimestamp(priceDateArg);
   const csvContent = fs.readFileSync(csvPath, 'utf8');
   const rows = parseCsv(csvContent);
@@ -44,6 +48,8 @@ async function main() {
     );
   }
 
+  // main flow:
+  // Normalize each CSV row into ticker and price values, while skipping rows with empty price cells and rejecting invalid numbers.
   const skippedRows = [];
   const parsedRows = dataRows
     .filter((row) => row.some((value) => value.trim().length > 0))
@@ -90,6 +96,8 @@ async function main() {
   const dedupedRows = dedupeByTicker(parsedRows);
   const client = new Client({ connectionString: databaseUrl });
 
+  // main flow:
+  // Open the database transaction, resolve security ids for all tickers, and upsert one latest price row per security/date pair.
   await client.connect();
 
   try {
@@ -150,6 +158,8 @@ async function main() {
 
     await client.query('COMMIT');
 
+    // main flow:
+    // Print the import summary after the transaction commits successfully, including skipped-row diagnostics.
     console.log(
       JSON.stringify(
         {
@@ -175,6 +185,8 @@ async function main() {
 }
 
 function resolvePricingTimestamp(dateArg) {
+  // resolvePricingTimestamp helper:
+  // Convert the optional CLI date into a UTC day timestamp, defaulting to the current UTC date when omitted.
   if (!dateArg) {
     const now = new Date();
     return new Date(
@@ -193,6 +205,8 @@ function resolvePricingTimestamp(dateArg) {
 }
 
 function dedupeByTicker(rows) {
+  // dedupeByTicker helper:
+  // Keep only the last occurrence of each ticker so reruns process one price row per unique security.
   const byTicker = new Map();
 
   for (const row of rows) {
@@ -203,6 +217,8 @@ function dedupeByTicker(rows) {
 }
 
 function buildHeaderIndex(header) {
+  // buildHeaderIndex helper:
+  // Normalize CSV header names and locate the ticker column plus any accepted price-column variant.
   const normalizedHeader = header.map((value) =>
     value
       .trim()
@@ -225,6 +241,8 @@ function buildHeaderIndex(header) {
 }
 
 function parseCsv(content) {
+  // parseCsv helper:
+  // Parse CSV content with support for quoted fields and Windows or Unix line endings.
   const rows = [];
   let currentRow = [];
   let currentField = '';
@@ -276,6 +294,8 @@ function parseCsv(content) {
 }
 
 main().catch((error) => {
+  // main flow:
+  // Surface the failure reason and exit with a non-zero status so the script fails clearly in the terminal.
   console.error(error instanceof Error ? error.message : error);
   process.exit(1);
 });
