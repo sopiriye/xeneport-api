@@ -19,6 +19,7 @@ enum PortfolioStatus {
 
 enum SecurityType {
   stock
+  etf
 }
 
 enum DriftEventStatus {
