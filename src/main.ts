@@ -1,5 +1,5 @@
-// import 'dotenv/config';
-import { ValidationPipe } from '@nestjs/common';
+// import 'dotenv/config'; // this is required to be removed for render deployment, as render does not support environment variables in this way. Instead, render injects env vars at runtime, so we can rely on process.env directly without needing to load from a .env file.
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -39,7 +39,14 @@ async function bootstrap() {
     credentials: true,
   });
   // end }
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: [
+      {
+        path: 'upload-prices',
+        method: RequestMethod.POST,
+      },
+    ],
+  });
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
